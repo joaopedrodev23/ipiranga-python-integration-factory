@@ -1,0 +1,13 @@
+service:
+  name: example-service
+  type: rest
+
+http:
+  inbound:
+    path: /example
+    method: POST
+
+integration:
+  target_type: rest
+  base_url: https://api.example.com
+  endpoint_path: /backend

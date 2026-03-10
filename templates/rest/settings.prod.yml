@@ -1,0 +1,14 @@
+service:
+  name: {{ service_name }}
+  description: {{ service_description }}
+
+http:
+  inbound:
+    path: {{ inbound_path }}
+    method: {{ http_method }}
+
+integration:
+  target_type: rest
+  base_url: {{ backend_base_url }}
+  endpoint_path: {{ backend_endpoint_path }}
+  mock_enabled: {{ integration_mock_enabled }}

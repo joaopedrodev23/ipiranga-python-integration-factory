@@ -1,6 +1,6 @@
 # ipiranga-python-integration-factory
 
-> **Internal Developer Platform** — microservice generator for the Ipiranga Integration Factory.
+> **Internal Developer Platform** - microservice generator for the Ipiranga Integration Factory.
 
 ---
 
@@ -9,8 +9,7 @@
 This repository provides a **command-line code generator** that scaffolds
 production-ready Python microservices from a concise YAML specification.
 Engineers describe *what* a service should do; the generator produces *how*
-it does it — FastAPI application, Pydantic models, HTTP/database/messaging
-clients, Docker configuration, and more.
+it does it - FastAPI application, integration client, dependency files, and more.
 
 The goal is to eliminate boilerplate, enforce architectural standards, and
 dramatically reduce the time from specification to a deployable service.
@@ -20,40 +19,38 @@ dramatically reduce the time from specification to a deployable service.
 ## Generator Concept
 
 ```
-YAML Spec  ──►  Loader  ──►  Validator  ──►  Renderer  ──►  Generated Project
+YAML Spec  -->  Loader  -->  Validator  -->  Renderer  -->  Generated Project
 ```
 
-| Layer | Responsibility |
-|-------|---------------|
-| **Loader** (`spec_loader.py`) | Reads and parses the YAML file |
-| **Validator** (`validators.py`) | Enforces required fields and allowed values |
-| **Scaffold** (`scaffold.py`) | Creates the output directory tree |
-| **Renderer** (`renderers/`) | Writes source files from templates + spec data |
+| Layer | File | Responsibility |
+|-------|------|----------------|
+| Loader | `spec_loader.py` | Reads and parses the YAML file |
+| Validator | `validators.py` | Enforces required fields and allowed values |
+| Scaffold | `scaffold.py` | Creates the output directory tree |
+| Renderer | `renderers/` | Writes source files from templates + spec data |
 
 ---
 
-## Planned Scenarios
+## Supported Scenarios
 
-### Phase 1 — REST Microservices *(in progress)*
+### Phase 1 - REST Microservices (IMPLEMENTED)
 
 Generates a FastAPI service that exposes an HTTP endpoint and proxies
 requests to a downstream REST API.
 
-Spec keys: `service`, `http.inbound`, `integration` (target_type: rest)
+Required spec keys: `service`, `http.inbound`, `integration` (target_type: rest)
 
-### Phase 2 — Database CRUD Microservices *(planned)*
+Supported HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
 
-Generates a FastAPI service with full Create / Read / Update / Delete
-endpoints backed by a relational database (SQLAlchemy + Alembic migrations).
+### Phase 2 - Database CRUD Microservices (planned)
 
-Spec keys: `service`, `http.inbound`, `database`
+Generates a FastAPI service with full CRUD endpoints backed by a relational
+database (SQLAlchemy + Alembic migrations).
 
-### Phase 3 — Kafka Listener Services *(planned)*
+### Phase 3 - Kafka Listener Services (planned)
 
 Generates a service that consumes messages from a Kafka topic and persists
 them to a relational database.
-
-Spec keys: `service`, `kafka.consumer`, `database`
 
 ---
 
@@ -63,21 +60,27 @@ Spec keys: `service`, `kafka.consumer`, `database`
 ipiranga-python-integration-factory/
 ├── generator/
 │   ├── __init__.py
-│   ├── cli.py            # CLI entry point (--spec / --output)
-│   ├── spec_loader.py    # YAML loader
-│   ├── validators.py     # Spec validation rules
-│   ├── scaffold.py       # Filesystem utilities
+│   ├── cli.py              # CLI entry point (--spec / --output)
+│   ├── spec_loader.py      # YAML loader
+│   ├── validators.py       # Spec validation rules
+│   ├── scaffold.py         # Filesystem utilities
 │   └── renderers/
 │       ├── __init__.py
-│       └── rest_renderer.py   # Phase 1 renderer (placeholder)
+│       └── rest_renderer.py    # Phase 1 REST renderer
 ├── templates/
-│   └── rest/             # Jinja2 templates for REST services (Phase 1)
+│   └── rest/               # Templates for REST services
+│       ├── app/
+│       │   └── main.py
+│       ├── requirements.txt
+│       └── README.md
 ├── examples/
-│   └── rest_service.yml  # Reference spec for a REST microservice
+│   └── rest_service.yml    # Reference spec for a REST microservice
 ├── tests/
+│   ├── test_cli.py
+│   ├── test_rest_renderer.py
+│   ├── test_scaffold.py
 │   ├── test_spec_loader.py
-│   ├── test_validators.py
-│   └── test_scaffold.py
+│   └── test_validators.py
 ├── README.md
 └── pyproject.toml
 ```
@@ -86,8 +89,8 @@ ipiranga-python-integration-factory/
 
 ## Requirements
 
-- **Python 3.13+**
-- **PyYAML 6.0+**
+- Python 3.12+
+- PyYAML 6.0+
 
 Install all dependencies (including dev tools):
 
@@ -105,7 +108,7 @@ python -m generator.cli \
   --output ./generated
 ```
 
-Or, after installing the package:
+Or after installing the package:
 
 ```bash
 integration-factory \
@@ -113,26 +116,48 @@ integration-factory \
   --output ./generated
 ```
 
-### Expected output (Phase 0 — foundation only)
+### CLI output
 
 ```
 [1/4] Loading spec from: examples/rest_service.yml
-[2/4] Validating spec …
-      ✔ service.name = 'example-service'
-      ✔ service.type = 'rest'
-[3/4] Spec is valid — service 'example-service' (type: rest)
-[4/4] Preparing output directory: ./generated
-      ✔ Output directory ready: /path/to/generated
+[2/4] Validating spec ...
+      [OK] service.name = 'example-service'
+      [OK] service.type = 'rest'
+[3/4] Preparing output directory: ./generated
+      [OK] Output directory ready: /path/to/generated
+[4/4] Generating rest service ...
+      [OK] Generated service directory: /path/to/generated/example-service
 
-Foundation phase complete. Generation not yet implemented.
+Generated REST service: example-service
+Output: /path/to/generated/example-service
 ```
 
 ---
 
-## Running Tests
+## Generated Output Structure
 
-```bash
-pytest
+```
+generated/example-service/
+├── app/
+│   └── main.py         # FastAPI application with configured route
+├── requirements.txt    # Runtime dependencies (fastapi, uvicorn)
+└── README.md           # Service-specific readme
+```
+
+### Example `app/main.py` (generated from `rest_service.yml`)
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI(title="example-service")
+
+@app.post("/example")
+def inbound():
+    return {
+        "service": "example-service",
+        "backend_url": "https://api.example.com/backend",
+        "status": "ok"
+    }
 ```
 
 ---
@@ -157,13 +182,28 @@ integration:
 
 ---
 
-## Contributing
+## Running Tests
 
-1. Follow the existing module structure.
-2. All new code must be fully typed (`from __future__ import annotations`).
-3. Add tests for every new validator or scaffold utility.
-4. Do **not** add database or Kafka support until Phase 2 / Phase 3 are
-   formally scoped.
+```bash
+pytest
+```
+
+All 34 tests should pass.
+
+---
+
+## Supported Spec Placeholders
+
+| Placeholder | Source field |
+|-------------|-------------|
+| `{{ service_name }}` | `service.name` |
+| `{{ inbound_path }}` | `http.inbound.path` |
+| `{{ http_method }}` | `http.inbound.method` |
+| `{{ http_method_lower }}` | `http.inbound.method.lower()` |
+| `{{ backend_base_url }}` | `integration.base_url` |
+| `{{ backend_endpoint_path }}` | `integration.endpoint_path` |
+
+Placeholder replacement is applied to files with extensions: `.py`, `.txt`, `.md`, `.yml`, `.yaml`
 
 ---
 

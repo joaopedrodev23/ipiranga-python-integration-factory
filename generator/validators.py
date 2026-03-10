@@ -9,9 +9,11 @@ Additional validators for future phases (database, Kafka) will be added here.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Supported service types — extend when new phases are implemented
+# Supported values
 # ---------------------------------------------------------------------------
 SUPPORTED_SERVICE_TYPES: frozenset[str] = frozenset({"rest"})
+SUPPORTED_HTTP_METHODS: frozenset[str] = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+SUPPORTED_TARGET_TYPES: frozenset[str] = frozenset({"rest"})
 
 
 class SpecValidationError(ValueError):
@@ -61,14 +63,8 @@ def validate_service_block(spec: dict) -> None:
 
     Required fields
     ---------------
-    - service.name   — non-empty string identifier
-    - service.type   — must be one of :data:`SUPPORTED_SERVICE_TYPES`
-
-    Args:
-        spec: Full parsed spec dictionary.
-
-    Raises:
-        SpecValidationError: On any validation failure.
+    - service.name   -- non-empty string identifier
+    - service.type   -- must be one of :data:`SUPPORTED_SERVICE_TYPES`
     """
     _require_field(spec, "service", context="spec")
     _require_field(spec, "service", "name", context="spec")
@@ -83,17 +79,55 @@ def validate_service_block(spec: dict) -> None:
         )
 
 
+def validate_rest_block(spec: dict) -> None:
+    """
+    Validate REST-specific blocks when service.type == "rest".
+
+    Required fields
+    ---------------
+    - http.inbound.path             -- non-empty string
+    - http.inbound.method           -- one of SUPPORTED_HTTP_METHODS
+    - integration.target_type       -- must be "rest"
+    - integration.base_url          -- non-empty string
+    - integration.endpoint_path     -- non-empty string
+    """
+    # http.inbound block
+    _require_field(spec, "http", context="spec")
+    _require_field(spec, "http", "inbound", context="spec")
+    _require_field(spec, "http", "inbound", "path", context="spec")
+    _require_field(spec, "http", "inbound", "method", context="spec")
+
+    method: str = spec["http"]["inbound"]["method"]
+    if method not in SUPPORTED_HTTP_METHODS:
+        supported = ", ".join(sorted(SUPPORTED_HTTP_METHODS))
+        raise SpecValidationError(
+            f"[spec] http.inbound.method '{method}' is not valid. "
+            f"Supported values: {supported}."
+        )
+
+    # integration block
+    _require_field(spec, "integration", context="spec")
+    _require_field(spec, "integration", "target_type", context="spec")
+    _require_field(spec, "integration", "base_url", context="spec")
+    _require_field(spec, "integration", "endpoint_path", context="spec")
+
+    target_type: str = spec["integration"]["target_type"]
+    if target_type not in SUPPORTED_TARGET_TYPES:
+        supported = ", ".join(sorted(SUPPORTED_TARGET_TYPES))
+        raise SpecValidationError(
+            f"[spec] integration.target_type '{target_type}' is not valid. "
+            f"Supported values: {supported}."
+        )
+
+
 def validate_spec(spec: dict) -> None:
     """
     Run all validators against *spec*.
 
-    This is the single entry-point called by the CLI.  Additional phase
-    validators should be invoked from here once implemented.
-
-    Args:
-        spec: Full parsed spec dictionary.
-
-    Raises:
-        SpecValidationError: If any validation rule is violated.
+    This is the single entry-point called by the CLI.
     """
     validate_service_block(spec)
+
+    service_type: str = spec["service"]["type"]
+    if service_type == "rest":
+        validate_rest_block(spec)

@@ -1,25 +1,22 @@
 """
-REST microservice renderer — Phase 1 placeholder.
+REST microservice renderer - Phase 1.
 
-This module will contain the logic that translates a validated REST spec
-into a fully functional FastAPI microservice project on disk.
-
-Current state
--------------
-The class is a typed placeholder only.  No generation logic is implemented.
-The ``render`` method logs its intent and returns without writing any files.
-
-Planned responsibilities (do NOT implement yet)
------------------------------------------------
-- Render ``main.py`` with a FastAPI application and the configured HTTP routes.
-- Render ``models.py`` with Pydantic request/response models derived from the spec.
-- Render ``client.py`` with an ``httpx``-based integration client for the
-  downstream ``integration.target_type == "rest"`` target.
-- Render ``pyproject.toml`` / ``Dockerfile`` for the generated service.
-- Copy or render Jinja2 templates from ``templates/rest/``.
+Translates a validated REST spec into a FastAPI microservice project on disk
+by copying the templates/rest/ tree and replacing placeholders in text files.
 """
 
 from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+# File extensions that support placeholder replacement.
+_TEXT_EXTENSIONS: frozenset[str] = frozenset({".py", ".txt", ".md", ".yml", ".yaml"})
+
+# Absolute path to the templates/rest directory, resolved relative to this file.
+_TEMPLATES_REST: Path = (
+    Path(__file__).resolve().parent.parent.parent / "templates" / "rest"
+)
 
 
 class RestRenderer:
@@ -28,7 +25,7 @@ class RestRenderer:
 
     Args:
         spec: Fully validated specification dictionary produced by
-              :func:`generator.validators.validate_spec`.
+              generator.validators.validate_spec.
     """
 
     def __init__(self, spec: dict) -> None:
@@ -40,36 +37,63 @@ class RestRenderer:
 
     def render(self, output_dir: str) -> None:
         """
-        Generate all source files for the REST microservice into *output_dir*.
-
-        .. note::
-            Generation logic is **not yet implemented**.
-            This method is a placeholder for Phase 1 development.
+        Generate all source files for the REST microservice into
+        <output_dir>/<service_name>/.
 
         Args:
-            output_dir: Absolute or relative path to the target directory.
-                        The directory is expected to exist before this method
-                        is called (see :func:`generator.scaffold.create_output_dir`).
+            output_dir: Base output directory (must already exist).
+
+        Raises:
+            FileExistsError: If the target service directory already exists.
+            FileNotFoundError: If the REST template directory is missing.
         """
-        service_name: str = self._spec.get("service", {}).get("name", "<unknown>")
-        # TODO (Phase 1): implement FastAPI project generation
-        print(
-            f"[RestRenderer] render() called for service '{service_name}' "
-            f"→ output_dir='{output_dir}' (not yet implemented)"
-        )
+        placeholders = self._build_placeholders()
+        service_name: str = placeholders["{{ service_name }}"]
+
+        dest = Path(output_dir).resolve() / service_name
+
+        if dest.exists():
+            raise FileExistsError(
+                f"[RestRenderer] Destination already exists: {dest}. "
+                "Remove it or choose a different output directory."
+            )
+
+        template_dir = _TEMPLATES_REST
+        if not template_dir.is_dir():
+            raise FileNotFoundError(
+                f"[RestRenderer] REST template directory not found: {template_dir}"
+            )
+
+        # Copy the entire template tree verbatim first.
+        shutil.copytree(str(template_dir), str(dest))
+
+        # Replace placeholders in all supported text files.
+        for file_path in dest.rglob("*"):
+            if file_path.is_file() and file_path.suffix in _TEXT_EXTENSIONS:
+                self._replace_placeholders(file_path, placeholders)
+
+        print(f"      [OK] Generated service directory: {dest}")
 
     # ------------------------------------------------------------------
-    # Private helpers (stubs for future implementation)
+    # Private helpers
     # ------------------------------------------------------------------
 
-    def _render_main(self, output_dir: str) -> None:
-        """Render ``main.py`` with the FastAPI application. (TODO)"""
-        raise NotImplementedError
+    def _build_placeholders(self) -> dict[str, str]:
+        """Build the placeholder -> replacement mapping from the spec."""
+        http_method: str = self._spec["http"]["inbound"]["method"]
+        return {
+            "{{ service_name }}": self._spec["service"]["name"],
+            "{{ inbound_path }}": self._spec["http"]["inbound"]["path"],
+            "{{ http_method }}": http_method,
+            "{{ http_method_lower }}": http_method.lower(),
+            "{{ backend_base_url }}": self._spec["integration"]["base_url"],
+            "{{ backend_endpoint_path }}": self._spec["integration"]["endpoint_path"],
+        }
 
-    def _render_models(self, output_dir: str) -> None:
-        """Render ``models.py`` with Pydantic schemas. (TODO)"""
-        raise NotImplementedError
-
-    def _render_client(self, output_dir: str) -> None:
-        """Render ``client.py`` with the downstream HTTP integration client. (TODO)"""
-        raise NotImplementedError
+    @staticmethod
+    def _replace_placeholders(file_path: Path, placeholders: dict[str, str]) -> None:
+        """Read *file_path*, replace all placeholders, and write back."""
+        content = file_path.read_text(encoding="utf-8")
+        for token, value in placeholders.items():
+            content = content.replace(token, value)
+        file_path.write_text(content, encoding="utf-8")
